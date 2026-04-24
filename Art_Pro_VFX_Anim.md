@@ -14,3 +14,8 @@
 ## 三、 物理原則與效能限制 (Physics & Perf)
 * **Squash & Stretch (擠壓與拉伸)**：方塊落地嵌入網格時，PixiJS 端應寫入微幅的 Y 軸壓縮、X 軸膨脹的彈性回饋。
 * **效能限制**：所有特效貼圖不可超過 1024x1024。透明區域必須完全裁切。
+
+## 四、 關鍵演出規格 (Key Sequences)
+* **死局波浪與炸散特效 (Deadlock Wave & Scatter)**：
+  - **資源依賴**：填補空格階段，必須隨機提取 `118_blockblast_obj_tile_1` 至 `118_blockblast_obj_tile_7` 貼圖。
+  - **視覺防呆**：炸散階段因採用程式碼控制 (Code-driven physics)，不使用額外的 Sprite Sheet。但需確保所有方塊的 `vr` (角速度) 與 `vx` (橫向力道) 不超過模糊閾值。

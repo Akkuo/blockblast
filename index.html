@@ -17,6 +17,10 @@
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: none;
+            -webkit-touch-callout: none; /* 禁用 iOS 長按選單 (拷貝/查詢) */
+            -webkit-user-select: none;   /* 禁用文字/區塊選取 */
+            user-select: none;
+            -webkit-tap-highlight-color: transparent; /* 移除點擊時的半透明反白 */
         }
         #game-container {
             height: 100vh;
@@ -124,7 +128,7 @@
         }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;">
     <div id="game-container">
         <div id="ui-layer">
             <div class="header" style="justify-content: flex-end;">

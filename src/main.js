@@ -31,6 +31,8 @@ class Engine {
         tileAssets.push('./assets/118_blockblast_w_combo.png');
         tileAssets.push('./assets/118_blockblast_w_score.png');
         tileAssets.push('./assets/118_blockblast_w_result_1.png');
+        tileAssets.push('./assets/118_blockblast_fx_tile_glow.png');
+        tileAssets.push('./assets/118_shar_light_white.png');
         await PIXI.Assets.load(tileAssets);
 
         this.app.ticker.add((time) => {
@@ -207,24 +209,99 @@ function resetContainer(cont) {
 }
 
 function spawnVFX(x, y) {
-    const vfx = graphicsPool.acquire();
-    resetGraphics(vfx);
-    vfx.circle(0, 0, CELL_SIZE / 2);
-    vfx.fill({ color: 0xffffff });
-    vfx.x = x + CELL_SIZE/2;
-    vfx.y = y + CELL_SIZE/2;
-    vfx.scale.set(0.5);
-    vfx.alpha = 1;
-    vfx.visible = true;
-    vfx.zIndex = 20; 
-    
-    const tickerCb = () => {
-        vfx.scale.set(vfx.scale.x + 0.1);
-        vfx.alpha -= 0.08;
-        if (vfx.alpha <= 0) {
-            vfx.visible = false;
+    // 1. 爆破震波 (Shockwave)
+    const shockwave = spritePool.acquire();
+    resetSprite(shockwave);
+    shockwave.texture = PIXI.Texture.from('./assets/118_blockblast_fx_tile_glow.png');
+    shockwave.anchor.set(0.5);
+    shockwave.x = x + CELL_SIZE/2;
+    shockwave.y = y + CELL_SIZE/2;
+    shockwave.scale.set(0.2);
+    shockwave.alpha = 1.0;
+    shockwave.blendMode = 'add';
+    shockwave.visible = true;
+    shockwave.zIndex = 20;
+
+    // 2. 核心星光 (Core Flash)
+    const flash = spritePool.acquire();
+    resetSprite(flash);
+    flash.texture = PIXI.Texture.from('./assets/118_shar_light_white.png');
+    flash.anchor.set(0.5);
+    flash.x = x + CELL_SIZE/2;
+    flash.y = y + CELL_SIZE/2;
+    flash.scale.set(0.1);
+    flash.alpha = 1.0;
+    flash.blendMode = 'add';
+    flash.rotation = Math.random() * Math.PI * 2;
+    flash.visible = true;
+    flash.zIndex = 21;
+
+    // 3. 碎裂粒子 (Particles)
+    const particles = [];
+    for(let i=0; i<8; i++) {
+        const p = spritePool.acquire();
+        resetSprite(p);
+        p.texture = PIXI.Texture.from('./assets/118_shar_light_white.png');
+        p.anchor.set(0.5);
+        p.x = x + CELL_SIZE/2;
+        p.y = y + CELL_SIZE/2;
+        p.scale.set(0.02 + Math.random() * 0.04);
+        p.alpha = 1.0;
+        p.blendMode = 'add';
+        p.visible = true;
+        p.zIndex = 22;
+        
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 12;
+        particles.push({
+            sprite: p,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            rot: (Math.random() - 0.5) * 0.4
+        });
+    }
+
+    let elapsed = 0;
+    const tickerCb = (time) => {
+        elapsed += time.deltaTime;
+        
+        // 震波快速放大並消散
+        shockwave.scale.set(shockwave.scale.x + 0.15 * time.deltaTime);
+        shockwave.alpha -= 0.06 * time.deltaTime;
+        
+        // 星光旋轉並放大縮小
+        flash.rotation += 0.1 * time.deltaTime;
+        flash.scale.set(flash.scale.x + 0.12 * time.deltaTime);
+        flash.alpha -= 0.08 * time.deltaTime;
+
+        // 粒子噴發與重力下墜
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (p.sprite.visible) {
+                p.sprite.x += p.vx * time.deltaTime;
+                p.sprite.y += p.vy * time.deltaTime;
+                p.vy += 0.5 * time.deltaTime; // 重力
+                p.sprite.rotation += p.rot * time.deltaTime;
+                p.sprite.alpha -= 0.03 * time.deltaTime;
+                if (p.sprite.alpha <= 0) {
+                    p.sprite.visible = false;
+                    spritePool.release(p.sprite);
+                }
+            }
+        }
+
+        // 檢查是否全部結束
+        const anyParticleVisible = particles.some(p => p.sprite.visible);
+        if (shockwave.alpha <= 0 && flash.alpha <= 0 && !anyParticleVisible) {
+            if (shockwave.visible) {
+                shockwave.visible = false;
+                spritePool.release(shockwave);
+            }
+            if (flash.visible) {
+                flash.visible = false;
+                spritePool.release(flash);
+            }
             engine.app.ticker.remove(tickerCb);
-            graphicsPool.release(vfx);
         }
     };
     engine.app.ticker.add(tickerCb);
@@ -235,6 +312,19 @@ function spawnEvaluateVFX(x, y, level, comboCount) {
     if (level > 0) {
         const clampedLevel = Math.min(Math.max(level, 1), 6);
         
+        // 背部發光特效
+        const backLight = spritePool.acquire();
+        resetSprite(backLight);
+        backLight.texture = PIXI.Texture.from('./assets/118_blockblast_fx_tile_glow.png');
+        backLight.anchor.set(0.5);
+        backLight.x = x;
+        backLight.y = y;
+        backLight.scale.set(0.5);
+        backLight.alpha = 0.8;
+        backLight.blendMode = 'add';
+        backLight.visible = true;
+        backLight.zIndex = 29;
+
         const evalSpr = spritePool.acquire();
         resetSprite(evalSpr);
         evalSpr.texture = PIXI.Texture.from(`./assets/118_blockblast_w_evaluate_${clampedLevel}.png`);
@@ -251,17 +341,33 @@ function spawnEvaluateVFX(x, y, level, comboCount) {
         let elapsed = 0;
         const tickerCb = (time) => {
             elapsed += time.deltaTime;
-            if (elapsed < 15) {
-                evalSpr.scale.set(evalSpr.scale.x + (targetScale - evalSpr.scale.x) * 0.3);
+            
+            // 彈性放大 (overshoot)
+            if (elapsed < 20) {
+                const progress = elapsed / 20;
+                // 模擬彈簧效果
+                const scale = targetScale * (1 + Math.sin(progress * Math.PI) * 0.3);
+                evalSpr.scale.set(scale);
+                backLight.scale.set(scale * 1.5);
+            } else {
+                evalSpr.scale.set(evalSpr.scale.x + (targetScale - evalSpr.scale.x) * 0.2);
             }
-            evalSpr.y -= 2 * time.deltaTime;
+            
+            // 緩慢向上飄
+            evalSpr.y -= 1.5 * time.deltaTime;
+            backLight.y -= 1.5 * time.deltaTime;
+            backLight.rotation += 0.05 * time.deltaTime;
+
             if (elapsed > 45) {
                 evalSpr.alpha -= 0.05 * time.deltaTime;
+                backLight.alpha -= 0.08 * time.deltaTime;
             }
             if (evalSpr.alpha <= 0) {
                 evalSpr.visible = false;
+                backLight.visible = false;
                 engine.app.ticker.remove(tickerCb);
                 spritePool.release(evalSpr);
+                spritePool.release(backLight);
             }
         };
         engine.app.ticker.add(tickerCb);

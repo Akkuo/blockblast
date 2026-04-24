@@ -447,12 +447,18 @@ function triggerGameOverWave() {
     
     for (let r = GRID_SIZE - 1; r >= 0; r--) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            const color = ((r + c) % 8) + 1; // 交錯彩虹 (斜線排列)
+            const color = ((r + c) % 8) + 1; // 1~8
+            // 讓 rainbow 與原本的 obj_tile (1~8) 以棋盤格形式交錯結合
+            const isRainbow = ((r + c) % 2 === 0);
+            const texPath = isRainbow 
+                ? `./assets/rainbow/${color}.png` 
+                : `./assets/118_blockblast_obj_tile_${color}.png`;
+                
             const entity = engine.world.spawn();
             
             const spr = spritePool.acquire();
             resetSprite(spr);
-            spr.texture = PIXI.Texture.from(`./assets/rainbow/${color}.png`);
+            spr.texture = PIXI.Texture.from(texPath);
             spr.width = CELL_SIZE;
             spr.height = CELL_SIZE;
             spr.x = c * CELL_SIZE + gridStartX;

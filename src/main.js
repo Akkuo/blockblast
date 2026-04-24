@@ -429,6 +429,21 @@ function checkElimination() {
     checkDeadlock();
 }
 
+function getDynamicOffsetY(fingerY) {
+    // Dock 區約在螢幕底部 400px，網格區約在底部 900px 以上
+    const dockY = engine.app.screen.height - 400; 
+    const gridY = engine.app.screen.height - 900; 
+    
+    // 在下方 Dock 區時，距離游標 80px (保持抓取的實體感)
+    if (fingerY >= dockY) return 80;
+    // 在上方網格區時，距離游標拉開到 280px (確保手指絕對不會擋住視線)
+    if (fingerY <= gridY) return 280;
+    
+    // 兩者之間進行平滑過渡 (Lerp)
+    const t = (dockY - fingerY) / (dockY - gridY); 
+    return 80 + t * 200;
+}
+
 function spawnPiece(slotIndex) {
     const ratio = getEmptyCellsRatio();
     let pool = [];
@@ -491,18 +506,12 @@ function spawnPiece(slotIndex) {
         container.zIndex = 10; 
         
         const dock = engine.world.getComponent(piece, 'dock');
-        let maxR = 0;
-        let maxC = 0;
-        dock.shape.forEach(b => { 
-            if(b.r > maxR) maxR = b.r; 
-            if(b.c > maxC) maxC = b.c; 
-        });
-        
         const transform = engine.world.getComponent(piece, 'transform');
-        // X 軸置中於手指
-        transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
-        // Y 軸讓「方塊最底端」剛好在游標上方 50px 處，拉近距離感
-        transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 50; 
+        
+        transform.x = e.global.x;
+        // 導入動態 Y 軸位移：越往上拖曳，方塊會浮得越高，拉開與手指的空間
+        const dynamicOffset = getDynamicOffsetY(e.global.y);
+        transform.y = e.global.y - dynamicOffset - dock.pivotY; 
         
         // 點擊瞬間直接鎖定座標，消除初始吸附的延遲感
         container.x = transform.x;
@@ -546,17 +555,11 @@ async function startGame() {
             const transform = engine.world.getComponent(pointerState.activeEntity, 'transform');
             const renderable = engine.world.getComponent(pointerState.activeEntity, 'renderable');
             const dock = engine.world.getComponent(pointerState.activeEntity, 'dock');
-            let maxR = 0;
-            let maxC = 0;
-            dock.shape.forEach(b => { 
-                if(b.r > maxR) maxR = b.r; 
-                if(b.c > maxC) maxC = b.c; 
-            });
             
-            // X 軸置中於手指
-            transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
-            // Y 軸讓「方塊最底端」剛好在游標上方 50px 處，拉近距離感
-            transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 50; 
+            transform.x = e.global.x;
+            // 套用動態 Y 軸位移：拖進網格區時自動拉大空間
+            const dynamicOffset = getDynamicOffsetY(e.global.y);
+            transform.y = e.global.y - dynamicOffset - dock.pivotY; 
             
             // 拖曳時強制同步視覺座標，完全繞過 update() 中的 lerp (補間動畫)
             // 這樣方塊會 100% 黏著滑鼠/手指，達到極致滑順的跟手感

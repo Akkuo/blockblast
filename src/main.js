@@ -137,6 +137,7 @@ let currentScore = 0;
 let globalBestScore = 0;
 let comboCount = 0;
 let usedPiecesCount = 0;
+let isGameOver = false;
 const dockedPieces = new Map();
 
 const pointerState = { isDragging: false, activeEntity: null, startX: 0, startY: 0 };
@@ -410,7 +411,99 @@ function spawnEvaluateVFX(x, y, level, comboCount) {
     }
 }
 
+function triggerGameOverWave() {
+    if (isGameOver) return;
+    isGameOver = true;
+    engine.app.stage.eventMode = 'none';
+    audio.playDeadlock();
+    
+    // 隱藏目前 Dock 上的方塊
+    for (const [slotIndex, piece] of dockedPieces.entries()) {
+        if (piece) {
+            const renderable = engine.world.getComponent(piece, 'renderable');
+            if (renderable && renderable.view) renderable.view.visible = false;
+        }
+    }
+    
+    // 徹底清空整個盤面：除了刪除 ECS 實體，還要歸還所有的 Sprite 給 pool
+    for(let r=0; r<GRID_SIZE; r++){
+        for(let c=0; c<GRID_SIZE; c++){
+            const e = logicGrid[r][c];
+            if (e !== null) {
+                const renderable = engine.world.getComponent(e, 'renderable');
+                if (renderable && renderable.view) {
+                    resetSprite(renderable.view);
+                    spritePool.release(renderable.view);
+                    engine.world.components.get('renderable').delete(e);
+                }
+                engine.world.destroy(e); 
+                logicGrid[r][c] = null;
+            }
+        }
+    }
+    
+    let currentRow = GRID_SIZE - 1;
+    let waveElapsed = 0;
+    
+    const waveTicker = (time) => {
+        waveElapsed += time.deltaTime;
+        // 控制波浪速度：每隔約 3 幀填滿一排
+        if (waveElapsed > 3) {
+            waveElapsed = 0;
+            if (currentRow >= 0) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    // 生成彩虹方塊實體
+                    const randColor = Math.floor(Math.random() * 8) + 1; // 1~8
+                    const entity = engine.world.spawn();
+                    
+                    const spr = spritePool.acquire();
+                    resetSprite(spr);
+                    spr.texture = PIXI.Texture.from(`./assets/rainbow/${randColor}.png`);
+                    spr.width = CELL_SIZE;
+                    spr.height = CELL_SIZE;
+                    spr.x = c * CELL_SIZE + gridStartX;
+                    spr.y = currentRow * CELL_SIZE + gridStartY;
+                    spr.visible = true;
+                    
+                    engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
+                    engine.world.addComponent(entity, 'renderable', { view: spr });
+                    
+                    // 寫入 logicGrid 以便之後 resetGame() 能自動清除
+                    logicGrid[currentRow][c] = entity;
+                    
+                    // 加入果凍彈跳動畫
+                    const targetScaleX = spr.scale.x;
+                    const targetScaleY = spr.scale.y;
+                    spr.scale.set(0.1);
+                    
+                    let sElapsed = 0;
+                    const scaleTicker = (t) => {
+                        sElapsed += t.deltaTime;
+                        if (sElapsed < 8) {
+                            spr.scale.x += (targetScaleX - spr.scale.x) * 0.4;
+                            spr.scale.y += (targetScaleY - spr.scale.y) * 0.4;
+                        } else {
+                            spr.scale.set(targetScaleX, targetScaleY);
+                            engine.app.ticker.remove(scaleTicker);
+                        }
+                    };
+                    engine.app.ticker.add(scaleTicker);
+                }
+                currentRow--;
+            } else {
+                // 波浪到達頂部，結束並顯示 UI
+                engine.app.ticker.remove(waveTicker);
+                document.getElementById('final-score').innerText = currentScore;
+                document.getElementById('best-score').innerText = globalBestScore;
+                document.getElementById('game-over-modal').style.display = 'flex';
+            }
+        }
+    };
+    engine.app.ticker.add(waveTicker);
+}
+
 function checkDeadlock() {
+    if (isGameOver) return;
     let canFitAny = false;
     let totalPieces = 0;
     
@@ -450,74 +543,7 @@ function checkDeadlock() {
     }
     
     if (totalPieces > 0 && !canFitAny) {
-        engine.app.stage.eventMode = 'none';
-        audio.playDeadlock();
-        
-        let currentRow = GRID_SIZE - 1;
-        let waveElapsed = 0;
-        
-        const waveTicker = (time) => {
-            waveElapsed += time.deltaTime;
-            // 控制波浪速度：每隔約 3 幀填滿一排
-            if (waveElapsed > 3) {
-                waveElapsed = 0;
-                if (currentRow >= 0) {
-                    for (let c = 0; c < GRID_SIZE; c++) {
-                        // 清除原有的方塊實體
-                        if (logicGrid[currentRow][c] !== null) {
-                            engine.world.destroy(logicGrid[currentRow][c]);
-                            logicGrid[currentRow][c] = null;
-                        }
-                        
-                        // 生成彩虹方塊實體
-                        const randColor = Math.floor(Math.random() * 8) + 1; // 1~8
-                        const entity = engine.world.spawn();
-                        
-                        const spr = spritePool.acquire();
-                        resetSprite(spr);
-                        spr.texture = PIXI.Texture.from(`./assets/rainbow/${randColor}.png`);
-                        spr.width = CELL_SIZE;
-                        spr.height = CELL_SIZE;
-                        spr.x = c * CELL_SIZE + gridStartX;
-                        spr.y = currentRow * CELL_SIZE + gridStartY;
-                        spr.visible = true;
-                        
-                        engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
-                        engine.world.addComponent(entity, 'renderable', { view: spr });
-                        
-                        // 寫入 logicGrid 以便之後 resetGame() 能自動清除
-                        logicGrid[currentRow][c] = entity;
-                        
-                        // 加入果凍彈跳動畫
-                        const targetScaleX = spr.scale.x;
-                        const targetScaleY = spr.scale.y;
-                        spr.scale.set(0.1);
-                        
-                        let sElapsed = 0;
-                        const scaleTicker = (t) => {
-                            sElapsed += t.deltaTime;
-                            if (sElapsed < 8) {
-                                spr.scale.x += (targetScaleX - spr.scale.x) * 0.4;
-                                spr.scale.y += (targetScaleY - spr.scale.y) * 0.4;
-                            } else {
-                                spr.scale.set(targetScaleX, targetScaleY);
-                                engine.app.ticker.remove(scaleTicker);
-                            }
-                        };
-                        engine.app.ticker.add(scaleTicker);
-                    }
-                    // 每一排完成時可以播放微小音效 (選擇性)
-                    currentRow--;
-                } else {
-                    // 波浪到達頂部，結束並顯示 UI
-                    engine.app.ticker.remove(waveTicker);
-                    document.getElementById('final-score').innerText = currentScore;
-                    document.getElementById('best-score').innerText = globalBestScore;
-                    document.getElementById('game-over-modal').style.display = 'flex';
-                }
-            }
-        };
-        engine.app.ticker.add(waveTicker);
+        triggerGameOverWave();
     }
 }
 
@@ -715,6 +741,14 @@ async function startGame() {
         const isMuted = audio.toggleMute();
         e.target.innerText = isMuted ? '🔇' : '🔊';
     });
+    
+    // 綁定測試波浪動畫按鈕
+    const testBtn = document.getElementById('test-deadlock-btn');
+    if(testBtn) {
+        testBtn.addEventListener('click', () => {
+            triggerGameOverWave();
+        });
+    }
 
     engine.app.stage.on('pointermove', (e) => {
         if (pointerState.isDragging && pointerState.activeEntity) {

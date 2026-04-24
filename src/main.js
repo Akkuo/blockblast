@@ -478,8 +478,8 @@ function checkDeadlock() {
                         spr.texture = PIXI.Texture.from(`./assets/rainbow/${randColor}.png`);
                         spr.width = CELL_SIZE;
                         spr.height = CELL_SIZE;
-                        spr.x = c * CELL_SIZE + GRID_OFFSET_X;
-                        spr.y = currentRow * CELL_SIZE + GRID_OFFSET_Y;
+                        spr.x = c * CELL_SIZE + gridStartX;
+                        spr.y = currentRow * CELL_SIZE + gridStartY;
                         spr.visible = true;
                         
                         engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });

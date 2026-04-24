@@ -496,25 +496,37 @@ function triggerGameOverWave() {
         engine.app.ticker.add(scaleTicker);
     });
     
-    // Phase 2: 填補完成後，所有方塊向上炸飛 (參考影片效果)
+    // Phase 2: 填補完成後，所有方塊向上炸飛 (優化為絲滑的物理起飛感)
     let phase2Delay = maxFillDelay + 15; 
     let flyElapsed = 0;
     
     // 預先為每個方塊分配飛行物理屬性
     allBlocks.forEach(block => {
-        // 越上方的方塊旋轉越明顯、飛越快
-        block.vy = -15 - (GRID_SIZE - block.r) * 0.5; 
-        block.vx = (Math.random() - 0.5) * 5; 
-        block.vr = (Math.random() - 0.5) * 0.3; 
+        block.vy = 0; // 初始速度為 0，創造 Ease-In 的絲滑起步
+        block.vx = (Math.random() - 0.5) * 8; // 水平炸散力道
+        block.vr = (Math.random() - 0.5) * 0.4; // 旋轉力道
+        // 極短的階梯起飛延遲：上方先動，下方跟上 (創造連動波浪感)
+        block.flyDelay = block.r * 1.5; 
     });
     
     const flyTicker = (t) => {
         flyElapsed += t.deltaTime;
         if (flyElapsed > phase2Delay) {
             allBlocks.forEach(block => {
-                block.spr.y += block.vy * t.deltaTime;
-                block.spr.x += block.vx * t.deltaTime;
-                block.spr.rotation += block.vr * t.deltaTime;
+                const activeTime = flyElapsed - phase2Delay;
+                if (activeTime > block.flyDelay) {
+                    // 平滑加速起飛 (重力反轉)
+                    block.vy -= 1.0 * t.deltaTime; 
+                    block.spr.y += block.vy * t.deltaTime;
+                    
+                    // 當方塊飛超過原始盤面的最頂端時，才觸發「散開」與「漸隱」
+                    // 這樣能維持原本整塊方塊向上推的視覺，直到頂部才如碎片般炸散
+                    if (block.spr.y < gridStartY) {
+                        block.spr.x += block.vx * t.deltaTime;
+                        block.spr.rotation += block.vr * t.deltaTime;
+                        block.spr.alpha = Math.max(0, block.spr.alpha - 0.03 * t.deltaTime);
+                    }
+                }
             });
             
             // 飛行一段時間後顯示結算畫面並清理

@@ -490,9 +490,18 @@ function spawnPiece(slotIndex) {
         container.scale.set(1.0); 
         container.zIndex = 10; 
         
+        const dock = engine.world.getComponent(piece, 'dock');
+        let maxR = 0;
+        let maxC = 0;
+        dock.shape.forEach(b => { 
+            if(b.r > maxR) maxR = b.r; 
+            if(b.c > maxC) maxC = b.c; 
+        });
+        
         const transform = engine.world.getComponent(piece, 'transform');
-        transform.x = e.global.x;
-        transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 150; 
+        // X 軸置中於手指，Y 軸大幅往上推 (避免手指擋住方塊)
+        transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
+        transform.y = e.global.y - (maxR * CELL_SIZE) - 250; 
         
         // 點擊瞬間直接鎖定座標，消除初始吸附的延遲感
         container.x = transform.x;
@@ -537,10 +546,15 @@ async function startGame() {
             const renderable = engine.world.getComponent(pointerState.activeEntity, 'renderable');
             const dock = engine.world.getComponent(pointerState.activeEntity, 'dock');
             let maxR = 0;
-            dock.shape.forEach(b => { if(b.r > maxR) maxR = b.r; });
+            let maxC = 0;
+            dock.shape.forEach(b => { 
+                if(b.r > maxR) maxR = b.r; 
+                if(b.c > maxC) maxC = b.c; 
+            });
             
-            transform.x = e.global.x;
-            transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 150; 
+            // X 軸置中於手指，Y 軸大幅往上推 (避免手指擋住方塊)
+            transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
+            transform.y = e.global.y - (maxR * CELL_SIZE) - 250; 
             
             // 拖曳時強制同步視覺座標，完全繞過 update() 中的 lerp (補間動畫)
             // 這樣方塊會 100% 黏著滑鼠/手指，達到極致滑順的跟手感

@@ -442,12 +442,9 @@ function triggerGameOverWave() {
                 spr = spritePool.acquire();
                 resetSprite(spr);
                 
-                // 棋盤格交錯結合 rainbow 與常規磚塊
-                const color = ((r + c) % 8) + 1;
-                const isRainbow = ((r + c) % 2 === 0);
-                const texPath = isRainbow 
-                    ? `./assets/rainbow/${color}.png` 
-                    : `./assets/118_blockblast_obj_tile_${color}.png`;
+                // 僅使用常規磚塊 1~7 (不使用 rainbow)
+                const color = ((r + c) % 7) + 1;
+                const texPath = `./assets/118_blockblast_obj_tile_${color}.png`;
                 
                 spr.texture = PIXI.Texture.from(texPath);
                 spr.width = CELL_SIZE;

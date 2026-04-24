@@ -451,14 +451,15 @@ function triggerGameOverWave() {
         if (waveElapsed > 3) {
             waveElapsed = 0;
             if (currentRow >= 0) {
+                // 計算當前排的顏色 (由下往上：1~8 依序)
+                const rowColor = ((GRID_SIZE - 1 - currentRow) % 8) + 1;
                 for (let c = 0; c < GRID_SIZE; c++) {
                     // 生成彩虹方塊實體
-                    const randColor = Math.floor(Math.random() * 8) + 1; // 1~8
                     const entity = engine.world.spawn();
                     
                     const spr = spritePool.acquire();
                     resetSprite(spr);
-                    spr.texture = PIXI.Texture.from(`./assets/rainbow/${randColor}.png`);
+                    spr.texture = PIXI.Texture.from(`./assets/rainbow/${rowColor}.png`);
                     spr.width = CELL_SIZE;
                     spr.height = CELL_SIZE;
                     spr.x = c * CELL_SIZE + gridStartX;

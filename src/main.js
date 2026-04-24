@@ -531,7 +531,7 @@ function checkElimination() {
         }
         
         const textX = engine.app.screen.width / 2;
-        const textY = gridStartY - 80;
+        const textY = gridStartY + 350; // 移至網格中間偏上的位置，避免與上方分數遮擋
         
         if (level > 0 || comboCount > 1) {
             spawnEvaluateVFX(textX, textY, level, comboCount);

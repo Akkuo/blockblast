@@ -231,38 +231,41 @@ function spawnVFX(x, y) {
 }
 
 function spawnEvaluateVFX(x, y, level, comboCount) {
-    const clampedLevel = Math.min(Math.max(level, 1), 6);
-    
-    const evalSpr = spritePool.acquire();
-    resetSprite(evalSpr);
-    evalSpr.texture = PIXI.Texture.from(`./assets/118_blockblast_w_evaluate_${clampedLevel}.png`);
-    evalSpr.anchor.set(0.5);
-    evalSpr.x = x;
-    evalSpr.y = y;
-    evalSpr.scale.set(0.1);
-    evalSpr.alpha = 1;
-    evalSpr.visible = true;
-    evalSpr.zIndex = 30;
+    // 若 level > 0 才顯示評價字樣 (預設2排=1, 3排=2...)
+    if (level > 0) {
+        const clampedLevel = Math.min(Math.max(level, 1), 6);
+        
+        const evalSpr = spritePool.acquire();
+        resetSprite(evalSpr);
+        evalSpr.texture = PIXI.Texture.from(`./assets/118_blockblast_w_evaluate_${clampedLevel}.png`);
+        evalSpr.anchor.set(0.5);
+        evalSpr.x = x;
+        evalSpr.y = y;
+        evalSpr.scale.set(0.1);
+        evalSpr.alpha = 1;
+        evalSpr.visible = true;
+        evalSpr.zIndex = 30;
 
-    const targetScale = 0.8 + (clampedLevel * 0.1);
+        const targetScale = 0.8 + (clampedLevel * 0.1);
 
-    let elapsed = 0;
-    const tickerCb = (time) => {
-        elapsed += time.deltaTime;
-        if (elapsed < 15) {
-            evalSpr.scale.set(evalSpr.scale.x + (targetScale - evalSpr.scale.x) * 0.3);
-        }
-        evalSpr.y -= 2 * time.deltaTime;
-        if (elapsed > 45) {
-            evalSpr.alpha -= 0.05 * time.deltaTime;
-        }
-        if (evalSpr.alpha <= 0) {
-            evalSpr.visible = false;
-            engine.app.ticker.remove(tickerCb);
-            spritePool.release(evalSpr);
-        }
-    };
-    engine.app.ticker.add(tickerCb);
+        let elapsed = 0;
+        const tickerCb = (time) => {
+            elapsed += time.deltaTime;
+            if (elapsed < 15) {
+                evalSpr.scale.set(evalSpr.scale.x + (targetScale - evalSpr.scale.x) * 0.3);
+            }
+            evalSpr.y -= 2 * time.deltaTime;
+            if (elapsed > 45) {
+                evalSpr.alpha -= 0.05 * time.deltaTime;
+            }
+            if (evalSpr.alpha <= 0) {
+                evalSpr.visible = false;
+                engine.app.ticker.remove(tickerCb);
+                spritePool.release(evalSpr);
+            }
+        };
+        engine.app.ticker.add(tickerCb);
+    }
 
     if (comboCount > 1) {
         const comboSpr = spritePool.acquire();
@@ -399,7 +402,8 @@ function checkElimination() {
         engine.shakeIntensity = lines * 15 + (comboCount > 1 ? 10 : 0);
         engine.shakeFrames = 15;
         
-        const addedScore = (lines * 100 * lines) + (comboCount > 1 ? comboCount * 50 : 0); 
+        // 分數指數成長：1排=100, 2排=200, 3排=400, 4排=800, 5排=1600 ... 
+        const addedScore = 100 * Math.pow(2, lines - 1) + (comboCount > 1 ? comboCount * 50 : 0); 
         currentScore += addedScore;
         
         if (scoreTextObj) scoreTextObj.text = currentScore.toString();
@@ -411,17 +415,19 @@ function checkElimination() {
             if (bestScoreTextObj) bestScoreTextObj.text = globalBestScore.toString();
         }
 
-        let level = 1; 
-        if (lines === 2) level = 2; 
-        if (lines === 3) level = 3; 
-        if (lines === 4) level = 4; 
-        if (lines >= 5) level = 5; 
-        if (comboCount > 2) level = Math.min(level + 1, 6); // 連擊推高評價
+        // 預設二排才開始顯示 Evaluate 圖示 (1到6)
+        let level = 0; 
+        if (lines >= 2) {
+            level = lines - 1; // 2排=1, 3排=2, 4排=3, 5排=4, 6排=5
+            if (comboCount > 2) level += 1; // 連擊推高一階評價
+        }
         
         const textX = engine.app.screen.width / 2;
         const textY = gridStartY - 80;
         
-        spawnEvaluateVFX(textX, textY, level, comboCount);
+        if (level > 0 || comboCount > 1) {
+            spawnEvaluateVFX(textX, textY, level, comboCount);
+        }
     } else {
         comboCount = 0; 
     }

@@ -442,64 +442,68 @@ function triggerGameOverWave() {
         }
     }
     
-    let currentRow = GRID_SIZE - 1;
-    let waveElapsed = 0;
+    // 一次性生成所有方塊，透過不同 delay 產生交錯波浪 (Snake Pattern & 斜向顏色)
+    let maxDelay = 0;
     
-    const waveTicker = (time) => {
-        waveElapsed += time.deltaTime;
-        // 控制波浪速度：每隔約 3 幀填滿一排
-        if (waveElapsed > 3) {
-            waveElapsed = 0;
-            if (currentRow >= 0) {
-                for (let c = 0; c < GRID_SIZE; c++) {
-                    // 每一排從左到右嚴格呈現 1~8 (紅橙黃綠藍靛紫)
-                    const color = c + 1;
-                    const entity = engine.world.spawn();
-                    
-                    const spr = spritePool.acquire();
-                    resetSprite(spr);
-                    spr.texture = PIXI.Texture.from(`./assets/rainbow/${color}.png`);
-                    spr.width = CELL_SIZE;
-                    spr.height = CELL_SIZE;
-                    spr.x = c * CELL_SIZE + gridStartX;
-                    spr.y = currentRow * CELL_SIZE + gridStartY;
+    for (let r = GRID_SIZE - 1; r >= 0; r--) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            const color = ((r + c) % 8) + 1; // 交錯彩虹 (斜線排列)
+            const entity = engine.world.spawn();
+            
+            const spr = spritePool.acquire();
+            resetSprite(spr);
+            spr.texture = PIXI.Texture.from(`./assets/rainbow/${color}.png`);
+            spr.width = CELL_SIZE;
+            spr.height = CELL_SIZE;
+            spr.x = c * CELL_SIZE + gridStartX;
+            spr.y = r * CELL_SIZE + gridStartY;
+            spr.visible = false; // 初始隱藏
+            
+            engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
+            engine.world.addComponent(entity, 'renderable', { view: spr });
+            logicGrid[r][c] = entity;
+            
+            // 計算交錯波浪的延遲 (S 型蛇行往上)
+            const rowFromBottom = GRID_SIZE - 1 - r;
+            const staggerC = (rowFromBottom % 2 === 0) ? c : (GRID_SIZE - 1 - c);
+            const delay = rowFromBottom * 8 + staggerC * 2;
+            if (delay > maxDelay) maxDelay = delay;
+            
+            const targetScaleX = spr.scale.x;
+            const targetScaleY = spr.scale.y;
+            spr.scale.set(0.01);
+            
+            let sElapsed = 0;
+            const scaleTicker = (t) => {
+                sElapsed += t.deltaTime;
+                if (sElapsed > delay) {
                     spr.visible = true;
-                    
-                    engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
-                    engine.world.addComponent(entity, 'renderable', { view: spr });
-                    
-                    // 寫入 logicGrid 以便之後 resetGame() 能自動清除
-                    logicGrid[currentRow][c] = entity;
-                    
-                    // 加入果凍彈跳動畫
-                    const targetScaleX = spr.scale.x;
-                    const targetScaleY = spr.scale.y;
-                    spr.scale.set(0.1);
-                    
-                    let sElapsed = 0;
-                    const scaleTicker = (t) => {
-                        sElapsed += t.deltaTime;
-                        if (sElapsed < 8) {
-                            spr.scale.x += (targetScaleX - spr.scale.x) * 0.4;
-                            spr.scale.y += (targetScaleY - spr.scale.y) * 0.4;
-                        } else {
-                            spr.scale.set(targetScaleX, targetScaleY);
-                            engine.app.ticker.remove(scaleTicker);
-                        }
-                    };
-                    engine.app.ticker.add(scaleTicker);
+                    const popProgress = sElapsed - delay;
+                    if (popProgress < 10) {
+                        spr.scale.x += (targetScaleX - spr.scale.x) * 0.4;
+                        spr.scale.y += (targetScaleY - spr.scale.y) * 0.4;
+                    } else {
+                        spr.scale.set(targetScaleX, targetScaleY);
+                        engine.app.ticker.remove(scaleTicker);
+                    }
                 }
-                currentRow--;
-            } else {
-                // 波浪到達頂部，結束並顯示 UI
-                engine.app.ticker.remove(waveTicker);
-                document.getElementById('final-score').innerText = currentScore;
-                document.getElementById('best-score').innerText = globalBestScore;
-                document.getElementById('game-over-modal').style.display = 'flex';
-            }
+            };
+            engine.app.ticker.add(scaleTicker);
+        }
+    }
+    
+    // 總結算彈窗延遲
+    let popupElapsed = 0;
+    const popupTicker = (t) => {
+        popupElapsed += t.deltaTime;
+        if (popupElapsed > maxDelay + 20) {
+            engine.app.ticker.remove(popupTicker);
+            document.getElementById('final-score').innerText = currentScore;
+            document.getElementById('best-score').innerText = globalBestScore;
+            document.getElementById('game-over-modal').style.display = 'flex';
         }
     };
-    engine.app.ticker.add(waveTicker);
+    engine.app.ticker.add(popupTicker);
 }
 
 function checkDeadlock() {

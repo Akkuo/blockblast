@@ -502,11 +502,13 @@ function triggerGameOverWave() {
     
     // 預先為每個方塊分配飛行物理屬性
     allBlocks.forEach(block => {
-        block.vy = 0; // 初始速度為 0，創造 Ease-In 的絲滑起步
-        block.vx = (Math.random() - 0.5) * 15; // 水平炸散力道加大，更有碎裂感
-        block.vr = (Math.random() - 0.5) * 0.5; // 旋轉力道
-        // 極短的階梯起飛延遲：上方先動，下方跟上 (創造連動波浪感)
-        block.flyDelay = block.r * 1.5; 
+        // 賦予極大且帶有「隨機差異」的垂直初始速度
+        block.vy = -10 - Math.random() * 20; 
+        // 調降水平炸散力道，避免移動過快產生殘影
+        block.vx = (Math.random() - 0.5) * 12; 
+        // 大幅調降旋轉角速度，避免 60fps 下因為旋轉跨度太大導致圖片看起來像糊掉
+        block.vr = (Math.random() - 0.5) * 0.15; 
+        block.flyDelay = 0; 
     });
     
     const flyTicker = (t) => {
@@ -515,22 +517,19 @@ function triggerGameOverWave() {
             allBlocks.forEach(block => {
                 const activeTime = flyElapsed - phase2Delay;
                 if (activeTime > block.flyDelay) {
-                    // 平滑加速起飛 (重力反轉)，稍微調高加速度讓演出更有爆發力
-                    block.vy -= 1.5 * t.deltaTime; 
-                    block.spr.y += block.vy * t.deltaTime;
+                    // 極端調高加速度 (-4.0)，達成極速飛離
+                    block.vy -= 4.0 * t.deltaTime; 
                     
-                    // 當方塊飛超過原始盤面的最頂端時，才觸發「散開」與「漸隱」
-                    if (block.spr.y < gridStartY) {
-                        block.spr.x += block.vx * t.deltaTime;
-                        block.spr.rotation += block.vr * t.deltaTime;
-                        block.spr.alpha = Math.max(0, block.spr.alpha - 0.03 * t.deltaTime);
-                    }
+                    // 取消原本「過界才散開」的限制，現在一開始就毫無規律地瘋狂炸散
+                    block.spr.x += block.vx * t.deltaTime;
+                    block.spr.y += block.vy * t.deltaTime;
+                    block.spr.rotation += block.vr * t.deltaTime;
+                    block.spr.alpha = Math.max(0, block.spr.alpha - 0.06 * t.deltaTime);
                 }
             });
             
-            // 飛行一段時間後顯示結算畫面並清理
-            // 延長演出時間到 140 幀，避免提早跳出結算畫面導致動畫被切斷
-            if (flyElapsed > phase2Delay + 140) {
+            // 要求 1 秒內演完 (60幀 = 1秒)，設定 45 幀 (約0.75秒) 跳出結算畫面
+            if (flyElapsed > phase2Delay + 45) {
                 engine.app.ticker.remove(flyTicker);
                 document.getElementById('final-score').innerText = currentScore;
                 document.getElementById('best-score').innerText = globalBestScore;

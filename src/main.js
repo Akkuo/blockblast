@@ -425,20 +425,6 @@ function triggerGameOverWave() {
         }
     }
     
-    // 徹底清空整個盤面：除了刪除 ECS 實體，還要歸還所有的 Sprite 給 pool
-    for(let r=0; r<GRID_SIZE; r++){
-        for(let c=0; c<GRID_SIZE; c++){
-            const e = logicGrid[r][c];
-            if (e !== null) {
-                const renderable = engine.world.getComponent(e, 'renderable');
-                if (renderable && renderable.view) {
-                    resetSprite(renderable.view);
-                    spritePool.release(renderable.view);
-                    engine.world.components.get('renderable').delete(e);
-                }
-                engine.world.destroy(e); 
-                logicGrid[r][c] = null;
-            }
     // Phase 1: 找出所有空格，進行由下往上、彩虹與常規磚塊交錯的波浪填補
     let newlySpawned = [];
     let allBlocks = [];

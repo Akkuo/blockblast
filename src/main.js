@@ -439,77 +439,122 @@ function triggerGameOverWave() {
                 engine.world.destroy(e); 
                 logicGrid[r][c] = null;
             }
-        }
-    }
-    
-    // 一次性生成所有方塊，透過不同 delay 產生交錯波浪 (Snake Pattern & 斜向顏色)
-    let maxDelay = 0;
+    // Phase 1: 找出所有空格，進行由下往上、彩虹與常規磚塊交錯的波浪填補
+    let newlySpawned = [];
+    let allBlocks = [];
+    let maxFillDelay = 0;
     
     for (let r = GRID_SIZE - 1; r >= 0; r--) {
         for (let c = 0; c < GRID_SIZE; c++) {
-            const color = ((r + c) % 8) + 1; // 1~8
-            // 讓 rainbow 與原本的 obj_tile (1~8) 以棋盤格形式交錯結合
-            const isRainbow = ((r + c) % 2 === 0);
-            const texPath = isRainbow 
-                ? `./assets/rainbow/${color}.png` 
-                : `./assets/118_blockblast_obj_tile_${color}.png`;
+            let entity = logicGrid[r][c];
+            let spr;
+            let isNew = false;
+            
+            if (entity === null) {
+                isNew = true;
+                entity = engine.world.spawn();
+                spr = spritePool.acquire();
+                resetSprite(spr);
                 
-            const entity = engine.world.spawn();
+                // 棋盤格交錯結合 rainbow 與常規磚塊
+                const color = ((r + c) % 8) + 1;
+                const isRainbow = ((r + c) % 2 === 0);
+                const texPath = isRainbow 
+                    ? `./assets/rainbow/${color}.png` 
+                    : `./assets/118_blockblast_obj_tile_${color}.png`;
+                
+                spr.texture = PIXI.Texture.from(texPath);
+                spr.width = CELL_SIZE;
+                spr.height = CELL_SIZE;
+                spr.x = c * CELL_SIZE + gridStartX;
+                spr.y = r * CELL_SIZE + gridStartY;
+                spr.visible = false;
+                
+                engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
+                engine.world.addComponent(entity, 'renderable', { view: spr });
+                logicGrid[r][c] = entity;
+                
+                const rowFromBottom = GRID_SIZE - 1 - r;
+                // 由下往上的平滑波浪
+                const delay = rowFromBottom * 4; 
+                if (delay > maxFillDelay) maxFillDelay = delay;
+                
+                newlySpawned.push({ spr, delay });
+            } else {
+                const renderable = engine.world.getComponent(entity, 'renderable');
+                spr = renderable.view;
+            }
             
-            const spr = spritePool.acquire();
-            resetSprite(spr);
-            spr.texture = PIXI.Texture.from(texPath);
-            spr.width = CELL_SIZE;
-            spr.height = CELL_SIZE;
-            spr.x = c * CELL_SIZE + gridStartX;
-            spr.y = r * CELL_SIZE + gridStartY;
-            spr.visible = false; // 初始隱藏
-            
-            engine.world.addComponent(entity, 'transform', { x: spr.x, y: spr.y });
-            engine.world.addComponent(entity, 'renderable', { view: spr });
-            logicGrid[r][c] = entity;
-            
-            // 計算交錯波浪的延遲 (S 型蛇行往上)
-            const rowFromBottom = GRID_SIZE - 1 - r;
-            const staggerC = (rowFromBottom % 2 === 0) ? c : (GRID_SIZE - 1 - c);
-            const delay = rowFromBottom * 8 + staggerC * 2;
-            if (delay > maxDelay) maxDelay = delay;
-            
-            const targetScaleX = spr.scale.x;
-            const targetScaleY = spr.scale.y;
-            spr.scale.set(0.01);
-            
-            let sElapsed = 0;
-            const scaleTicker = (t) => {
-                sElapsed += t.deltaTime;
-                if (sElapsed > delay) {
-                    spr.visible = true;
-                    const popProgress = sElapsed - delay;
-                    if (popProgress < 10) {
-                        spr.scale.x += (targetScaleX - spr.scale.x) * 0.4;
-                        spr.scale.y += (targetScaleY - spr.scale.y) * 0.4;
-                    } else {
-                        spr.scale.set(targetScaleX, targetScaleY);
-                        engine.app.ticker.remove(scaleTicker);
-                    }
-                }
-            };
-            engine.app.ticker.add(scaleTicker);
+            allBlocks.push({ spr, r, c });
         }
     }
     
-    // 總結算彈窗延遲
-    let popupElapsed = 0;
-    const popupTicker = (t) => {
-        popupElapsed += t.deltaTime;
-        if (popupElapsed > maxDelay + 20) {
-            engine.app.ticker.remove(popupTicker);
-            document.getElementById('final-score').innerText = currentScore;
-            document.getElementById('best-score').innerText = globalBestScore;
-            document.getElementById('game-over-modal').style.display = 'flex';
+    // 執行 Phase 1 填補動畫
+    newlySpawned.forEach(block => {
+        const targetScaleX = block.spr.scale.x;
+        const targetScaleY = block.spr.scale.y;
+        block.spr.scale.set(0.01);
+        
+        let sElapsed = 0;
+        const scaleTicker = (t) => {
+            sElapsed += t.deltaTime;
+            if (sElapsed > block.delay) {
+                block.spr.visible = true;
+                const popProgress = sElapsed - block.delay;
+                if (popProgress < 10) {
+                    block.spr.scale.x += (targetScaleX - block.spr.scale.x) * 0.4;
+                    block.spr.scale.y += (targetScaleY - block.spr.scale.y) * 0.4;
+                } else {
+                    block.spr.scale.set(targetScaleX, targetScaleY);
+                    engine.app.ticker.remove(scaleTicker);
+                }
+            }
+        };
+        engine.app.ticker.add(scaleTicker);
+    });
+    
+    // Phase 2: 填補完成後，所有方塊向上炸飛 (參考影片效果)
+    let phase2Delay = maxFillDelay + 15; 
+    let flyElapsed = 0;
+    
+    // 預先為每個方塊分配飛行物理屬性
+    allBlocks.forEach(block => {
+        // 越上方的方塊旋轉越明顯、飛越快
+        block.vy = -15 - (GRID_SIZE - block.r) * 0.5; 
+        block.vx = (Math.random() - 0.5) * 5; 
+        block.vr = (Math.random() - 0.5) * 0.3; 
+    });
+    
+    const flyTicker = (t) => {
+        flyElapsed += t.deltaTime;
+        if (flyElapsed > phase2Delay) {
+            allBlocks.forEach(block => {
+                block.spr.y += block.vy * t.deltaTime;
+                block.spr.x += block.vx * t.deltaTime;
+                block.spr.rotation += block.vr * t.deltaTime;
+            });
+            
+            // 飛行一段時間後顯示結算畫面並清理
+            if (flyElapsed > phase2Delay + 60) {
+                engine.app.ticker.remove(flyTicker);
+                document.getElementById('final-score').innerText = currentScore;
+                document.getElementById('best-score').innerText = globalBestScore;
+                document.getElementById('game-over-modal').style.display = 'flex';
+                
+                allBlocks.forEach(b => {
+                    const e = logicGrid[b.r][b.c];
+                    if (e) {
+                        resetSprite(b.spr);
+                        spritePool.release(b.spr);
+                        engine.world.components.get('renderable').delete(e);
+                        engine.world.destroy(e);
+                        logicGrid[b.r][b.c] = null;
+                    }
+                });
+            }
         }
     };
-    engine.app.ticker.add(popupTicker);
+    engine.app.ticker.add(flyTicker);
 }
 
 function checkDeadlock() {

@@ -182,6 +182,8 @@ function resetSprite(spr) {
     spr.anchor.set(0, 0); // 確保歸零
     spr.alpha = 1.0;
     spr.tint = 0xffffff;
+    spr.rotation = 0; // 重置旋轉，避免被特效污染
+    spr.blendMode = 'normal'; // 重置混合模式
     spr.visible = false;
     spr.eventMode = 'none';
     spr.zIndex = 0;

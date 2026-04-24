@@ -493,6 +493,10 @@ function spawnPiece(slotIndex) {
         const transform = engine.world.getComponent(piece, 'transform');
         transform.x = e.global.x;
         transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 150; 
+        
+        // 點擊瞬間直接鎖定座標，消除初始吸附的延遲感
+        container.x = transform.x;
+        container.y = transform.y;
     });
 
     container.x = startX;
@@ -530,11 +534,20 @@ async function startGame() {
     engine.app.stage.on('pointermove', (e) => {
         if (pointerState.isDragging && pointerState.activeEntity) {
             const transform = engine.world.getComponent(pointerState.activeEntity, 'transform');
+            const renderable = engine.world.getComponent(pointerState.activeEntity, 'renderable');
             const dock = engine.world.getComponent(pointerState.activeEntity, 'dock');
             let maxR = 0;
             dock.shape.forEach(b => { if(b.r > maxR) maxR = b.r; });
+            
             transform.x = e.global.x;
             transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 150; 
+            
+            // 拖曳時強制同步視覺座標，完全繞過 update() 中的 lerp (補間動畫)
+            // 這樣方塊會 100% 黏著滑鼠/手指，達到極致滑順的跟手感
+            if (renderable && renderable.view) {
+                renderable.view.x = transform.x;
+                renderable.view.y = transform.y;
+            }
         }
     });
 

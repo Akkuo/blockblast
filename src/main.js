@@ -499,9 +499,10 @@ function spawnPiece(slotIndex) {
         });
         
         const transform = engine.world.getComponent(piece, 'transform');
-        // X 軸置中於手指，Y 軸大幅往上推 (避免手指擋住方塊)
+        // X 軸置中於手指
         transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
-        transform.y = e.global.y - (maxR * CELL_SIZE) - 250; 
+        // Y 軸讓「方塊最底端」剛好在游標上方 50px 處，拉近距離感
+        transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 50; 
         
         // 點擊瞬間直接鎖定座標，消除初始吸附的延遲感
         container.x = transform.x;
@@ -552,9 +553,10 @@ async function startGame() {
                 if(b.c > maxC) maxC = b.c; 
             });
             
-            // X 軸置中於手指，Y 軸大幅往上推 (避免手指擋住方塊)
+            // X 軸置中於手指
             transform.x = e.global.x - (maxC * CELL_SIZE) / 2 - (CELL_SIZE / 2);
-            transform.y = e.global.y - (maxR * CELL_SIZE) - 250; 
+            // Y 軸讓「方塊最底端」剛好在游標上方 50px 處，拉近距離感
+            transform.y = e.global.y - (maxR + 1) * CELL_SIZE - 50; 
             
             // 拖曳時強制同步視覺座標，完全繞過 update() 中的 lerp (補間動畫)
             // 這樣方塊會 100% 黏著滑鼠/手指，達到極致滑順的跟手感
